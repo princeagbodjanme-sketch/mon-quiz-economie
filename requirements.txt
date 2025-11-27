@@ -1,6 +1,7 @@
-streamlit
-google-generativeai
-matplotlib
-pandas
-requests
-beautifulsoup4
+streamlit>=1.36.0
+google-generativeai>=0.8.0
+openai>=1.0.0
+matplotlib>=3.8.0
+pandas>=2.2.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
