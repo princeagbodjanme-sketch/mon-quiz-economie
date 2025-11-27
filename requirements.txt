@@ -2,3 +2,5 @@ streamlit
 google-generativeai
 matplotlib
 pandas
+requests
+beautifulsoup4
