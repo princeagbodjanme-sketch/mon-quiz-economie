@@ -1,41 +1,53 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
+import json
 
-st.title("🔧 Outil de Diagnostic API Gemini")
+st.set_page_config(page_title="Test Direct API", page_icon="🕵️")
 
-st.info("Ce petit site sert juste à tester si ta clé fonctionne.")
+st.title("🕵️ Test Direct de l'API (Sans intermédiaire)")
+st.warning("Ce test contourne la librairie Python pour interroger Google directement.")
 
-# Zone pour coller la clé
-api_key = st.text_input("Colle ta clé API ici :", type="password")
+# 1. On récupère la clé
+api_key = st.text_input("Colle ta clé API (AIza...)", type="password")
 
-if st.button("Lancer le test"):
+if st.button("Lancer le test ULTIME"):
     if not api_key:
-        st.warning("Il faut coller une clé d'abord !")
+        st.error("Il manque la clé.")
     else:
+        # 2. L'adresse directe des serveurs Google
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        
+        # 3. Le message qu'on envoie
+        payload = {
+            "contents": [{
+                "parts": [{"text": "Si tu reçois ce message, réponds juste par le mot BRAVO."}]
+            }]
+        }
+        headers = {'Content-Type': 'application/json'}
+
         try:
-            # 1. On configure
-            genai.configure(api_key=api_key)
+            with st.spinner("Envoi de la requête directe..."):
+                # On envoie la requête POST (comme un formulaire web)
+                response = requests.post(url, headers=headers, json=payload)
             
-            # 2. On essaie de parler au modèle
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content("Dis juste 'OK' si tu me reçois.")
+            # 4. ANALYSE DU RÉSULTAT
+            if response.status_code == 200:
+                st.balloons()
+                st.success("✅ CA FONCTIONNE ! La clé est valide.")
+                data = response.json()
+                try:
+                    texte_reponse = data['candidates'][0]['content']['parts'][0]['text']
+                    st.info(f"Réponse de Google : {texte_reponse}")
+                    st.markdown("---")
+                    st.write("👉 Le problème venait donc de la librairie 'google-generativeai' ou de son installation.")
+                except:
+                    st.warning("Ça a marché, mais la réponse est vide (bizarre, mais la connexion est OK).")
             
-            # 3. Si on arrive ici, c'est que ça marche
-            st.success("✅ VICTOIRE ! Ta clé fonctionne parfaitement.")
-            st.write(f"Réponse de Gemini : {response.text}")
-            st.markdown("---")
-            st.write("👉 Tu peux maintenant remettre le code complet de l'application dans GitHub.")
-            
+            else:
+                st.error(f"❌ ÉCHEC. Code d'erreur : {response.status_code}")
+                st.markdown("### Voici le message d'erreur EXACT renvoyé par Google :")
+                # C'est ici qu'on aura la vraie raison
+                st.json(response.json())
+                
         except Exception as e:
-            # 4. Si ça plante, on affiche l'erreur exacte
-            st.error("❌ ÉCHEC. La clé ne marche pas.")
-            st.code(f"Message d'erreur technique : {e}")
-            
-            # Aide au diagnostic
-            erreur_str = str(e)
-            if "400" in erreur_str:
-                st.warning("💡 Indice : Vérifie que tu n'as pas copié d'espace en trop avant ou après la clé.")
-            elif "403" in erreur_str:
-                st.warning("💡 Indice : Tu n'as peut-être pas les droits ou c'est une clé Google Cloud au lieu de AI Studio.")
-            elif "location" in erreur_str:
-                st.warning("💡 Indice : Problème de localisation (VPN ?).")
+            st.error(f"Erreur technique de connexion : {e}")
