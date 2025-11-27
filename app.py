@@ -11,6 +11,13 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from openai import OpenAI
 
+from io import BytesIO
+from PyPDF2 import PdfReader
+from docx import Document
+from pptx import Presentation
+from PIL import Image
+import pytesseract
+
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Gemini/GPT Exam Platform", page_icon="🎓", layout="wide")
 
@@ -115,10 +122,77 @@ def publish_exam(author, title, questions):
 init_db()
 
 # --- 3. UTILITAIRES ---
-def extract_text_from_file(f) -> str:
-    try:
-        return f.getvalue().decode("utf-8")
-    except Exception:
+
+def extract_text_from_file(uploaded_file) -> str:
+    """
+    Prend en charge :
+    - .txt
+    - .pdf
+    - .docx (Word)
+    - .pptx (PowerPoint)
+    - .png / .jpg / .jpeg (OCR)
+    """
+    if uploaded_file is None:
+        return ""
+
+    filename = uploaded_file.name.lower()
+    data = uploaded_file.getvalue()
+
+    # TXT
+    if filename.endswith(".txt"):
+        try:
+            return data.decode("utf-8", errors="ignore")
+        except Exception:
+            return ""
+
+    # PDF
+    elif filename.endswith(".pdf"):
+        try:
+            reader = PdfReader(BytesIO(data))
+            text = ""
+            for page in reader.pages:
+                page_text = page.extract_text() or ""
+                text += page_text + "\n"
+            return text
+        except Exception as e:
+            st.warning(f"Impossible de lire le PDF : {e}")
+            return ""
+
+    # WORD (.docx)
+    elif filename.endswith(".docx"):
+        try:
+            document = Document(BytesIO(data))
+            return "\n".join(para.text for para in document.paragraphs)
+        except Exception as e:
+            st.warning(f"Impossible de lire le fichier Word : {e}")
+            return ""
+
+    # POWERPOINT (.pptx)
+    elif filename.endswith(".pptx"):
+        try:
+            prs = Presentation(BytesIO(data))
+            texts = []
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        texts.append(shape.text)
+            return "\n".join(texts)
+        except Exception as e:
+            st.warning(f"Impossible de lire le PowerPoint : {e}")
+            return ""
+
+    # IMAGES (OCR)
+    elif filename.endswith((".png", ".jpg", ".jpeg")):
+        try:
+            image = Image.open(BytesIO(data))
+            text = pytesseract.image_to_string(image, lang="fra+eng")
+            return text
+        except Exception:
+            st.warning("Impossible d'extraire le texte de l'image (OCR indisponible sur ce serveur).")
+            return ""
+
+    else:
+        st.warning("Type de fichier non pris en charge.")
         return ""
 
 def extract_text_from_url(url: str) -> str:
@@ -335,7 +409,7 @@ def main():
     # --- EN-TÊTE PRINCIPALE ---
     st.markdown(
         '<div class="main-header"><h1>🎓 Espace de Révision IA</h1>'
-        '<p>Génère, passe et partage des examens à partir de tes supports de cours.</p></div>',
+        '<p>Génère, passe et partage des examens à partir de tes supports de cours (PDF, Word, PowerPoint, images, etc.).</p></div>',
         unsafe_allow_html=True,
     )
 
@@ -347,14 +421,17 @@ def main():
 
         with col_gen:
             st.subheader("🤖 Générateur d'examen IA")
-            st.caption("Charge un texte ou une URL, choisis ton moteur IA, puis lance la génération.")
+            st.caption("Charge un fichier (PDF, Word, PPTX, image...) ou une URL, choisis ton moteur IA, puis lance la génération.")
 
             with st.container():
                 st.markdown('<div class="card">', unsafe_allow_html=True)
-                src = st.radio("Source du contenu", ["Fichier (.txt)", "URL"], horizontal=True)
+                src = st.radio("Source du contenu", ["Fichier (txt, pdf, docx, pptx, image)", "URL"], horizontal=True)
                 txt = ""
-                if src == "Fichier (.txt)":
-                    up = st.file_uploader("Fichier texte", type=['txt'])
+                if src == "Fichier (txt, pdf, docx, pptx, image)":
+                    up = st.file_uploader(
+                        "Fichier support de cours",
+                        type=['txt', 'pdf', 'docx', 'pptx', 'png', 'jpg', 'jpeg']
+                    )
                     if up:
                         txt = extract_text_from_file(up)
                 else:
@@ -366,7 +443,7 @@ def main():
 
             if st.button("🚀 Générer l'examen", type="primary"):
                 if not txt:
-                    st.warning("Le texte est vide. Fournis un fichier ou une URL avec du contenu.")
+                    st.warning("Le texte extrait est vide. Vérifie ton fichier ou ton URL.")
                 else:
                     provider = st.session_state.get("current_provider", "gemini")
                     with st.spinner("Génération des questions..."):
