@@ -16,7 +16,12 @@ from PyPDF2 import PdfReader
 from docx import Document
 from pptx import Presentation
 from PIL import Image
-import pytesseract
+
+# pytesseract devient optionnel
+try:
+    import pytesseract
+except ImportError:
+    pytesseract = None
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Gemini/GPT Exam Platform", page_icon="🎓", layout="wide")
@@ -130,7 +135,7 @@ def extract_text_from_file(uploaded_file) -> str:
     - .pdf
     - .docx (Word)
     - .pptx (PowerPoint)
-    - .png / .jpg / .jpeg (OCR)
+    - .png / .jpg / .jpeg (OCR si pytesseract dispo)
     """
     if uploaded_file is None:
         return ""
@@ -183,12 +188,15 @@ def extract_text_from_file(uploaded_file) -> str:
 
     # IMAGES (OCR)
     elif filename.endswith((".png", ".jpg", ".jpeg")):
+        if pytesseract is None:
+            st.warning("OCR indisponible (pytesseract non installé sur ce serveur).")
+            return ""
         try:
             image = Image.open(BytesIO(data))
             text = pytesseract.image_to_string(image, lang="fra+eng")
             return text
-        except Exception:
-            st.warning("Impossible d'extraire le texte de l'image (OCR indisponible sur ce serveur).")
+        except Exception as e:
+            st.warning(f"Impossible d'extraire le texte de l'image : {e}")
             return ""
 
     else:
