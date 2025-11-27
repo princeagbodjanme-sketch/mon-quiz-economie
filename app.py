@@ -237,24 +237,92 @@ def render_graph(data):
 
 def parse_quiz_json(raw_text: str):
     """
-    Nettoie les blocs ```json ... ``` ou ``` ... ``` 
-    et extrait la première structure JSON (liste ou objet).
+    Nettoie les blocs ```json ... ``` ou ``` ... ```
+    et extrait une liste de questions à partir de tous les objets JSON valides trouvés.
+
+    - Si le JSON complet est valide → on le retourne directement.
+    - Sinon → on récupère chaque objet { ... } bien formé dans le texte et on les charge un par un.
     """
     if not raw_text:
         raise ValueError("Texte vide retourné par le modèle.")
 
     text = raw_text.strip()
 
-    # 1) On enlève explicitement les balises ```json et ```JSON
+    # 1) On enlève explicitement les balises ```json / ```JSON
     text = text.replace("```json", "```").replace("```JSON", "```")
 
     # 2) Si des ``` sont présents, on récupère la partie "au milieu"
     if "```" in text:
         parts = text.split("```")
-        # on garde uniquement les morceaux non vides
         candidates = [p.strip() for p in parts if p.strip()]
         if candidates:
             text = candidates[0]
+
+    text = text.strip()
+
+    # 3) On cherche le premier caractère JSON plausible
+    first_bracket = text.find("[")
+    first_brace = text.find("{")
+    starts = [idx for idx in [first_bracket, first_brace] if idx != -1]
+    if not starts:
+        raise ValueError("Impossible de trouver une structure JSON dans le texte suivant :\n" + text[:200])
+
+    start_idx = min(starts)
+    text = text[start_idx:].strip()
+
+    # 4) Première tentative : on essaie de parser directement
+    try:
+        parsed = json.loads(text)
+        # Si c'est un objet unique, on le met dans une liste
+        if isinstance(parsed, dict):
+            return [parsed]
+        return parsed
+    except json.JSONDecodeError:
+        # On tente une récupération fine en parcourant chaque objet { ... } bien formé
+        pass
+
+    # 5) Récupération robuste : on balaye le texte et on extrait les objets JSON valides
+    items = []
+    i = 0
+    n = len(text)
+
+    while i < n:
+        # Cherche le prochain '{'
+        start = text.find("{", i)
+        if start == -1:
+            break
+
+        depth = 0
+        j = start
+        while j < n:
+            ch = text[j]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+
+            j += 1
+
+            # Quand depth retombe à 0, on a un objet complet
+            if depth == 0:
+                obj_str = text[start:j].strip()
+                try:
+                    obj = json.loads(obj_str)
+                    items.append(obj)
+                except Exception:
+                    # si cet objet est invalide, on l'ignore et on sort de la boucle
+                    pass
+                i = j
+                break
+        else:
+            # On sort si on atteint la fin du texte avec des accolades non fermées
+            break
+
+    if not items:
+        raise ValueError("Aucun objet JSON valide n'a pu être extrait.\nDébut du texte :\n" + text[:300])
+
+    return items
+
 
     # 3) On cherche le premier caractère JSON valable : '[' ou '{'
     first_bracket = text.find("[")
