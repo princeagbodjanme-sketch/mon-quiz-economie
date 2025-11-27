@@ -366,8 +366,9 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
 
             if st.button("🚀 Générer l'examen", type="primary"):
-                if not txt or len(txt) < 50:
-                    st.warning("Le texte est trop court. Fournis un contenu plus complet.")
+                if not txt or len(txt) < 10:
+    st.warning("Le texte est vide.")
+
                 else:
                     provider = st.session_state.get("current_provider", "gemini")
                     with st.spinner("Génération des questions..."):
