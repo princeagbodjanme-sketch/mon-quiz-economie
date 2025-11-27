@@ -159,7 +159,6 @@ def parse_quiz_json(raw_text: str):
         raise ValueError("Texte vide retourné par le modèle.")
     text = raw_text.strip()
     if "```" in text:
-        # on enlève les balises markdown éventuelles
         parts = text.split("```")
         if len(parts) >= 3:
             text = parts[1]
@@ -366,9 +365,8 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
 
             if st.button("🚀 Générer l'examen", type="primary"):
-                if not txt or len(txt) < 10:
-    st.warning("Le texte est vide.")
-
+                if not txt:
+                    st.warning("Le texte est vide. Fournis un fichier ou une URL avec du contenu.")
                 else:
                     provider = st.session_state.get("current_provider", "gemini")
                     with st.spinner("Génération des questions..."):
@@ -445,7 +443,6 @@ def main():
         i = st.session_state.idx
 
         if rem <= 0:
-            # Temps écoulé : on termine l'examen
             i = len(qs)
 
         if i < len(qs):
@@ -490,7 +487,6 @@ def main():
                 st.session_state.ans,
             )
 
-            # Publication possible uniquement pour les examens IA
             if st.session_state.current_course == "Examen IA":
                 if st.button("📤 Publier cet examen"):
                     publish_exam(
