@@ -236,16 +236,41 @@ def render_graph(data):
         pass
 
 def parse_quiz_json(raw_text: str):
-    """Nettoie les blocs ```json ... ``` et retourne une liste de questions."""
+    """
+    Nettoie les blocs ```json ... ``` ou ``` ... ``` 
+    et extrait la première structure JSON (liste ou objet).
+    """
     if not raw_text:
         raise ValueError("Texte vide retourné par le modèle.")
+
     text = raw_text.strip()
+
+    # 1) On enlève explicitement les balises ```json et ```JSON
+    text = text.replace("```json", "```").replace("```JSON", "```")
+
+    # 2) Si des ``` sont présents, on récupère la partie "au milieu"
     if "```" in text:
         parts = text.split("```")
-        if len(parts) >= 3:
-            text = parts[1]
-    text = text.strip()
+        # on garde uniquement les morceaux non vides
+        candidates = [p.strip() for p in parts if p.strip()]
+        if candidates:
+            text = candidates[0]
+
+    # 3) On cherche le premier caractère JSON valable : '[' ou '{'
+    first_bracket = text.find("[")
+    first_brace = text.find("{")
+
+    starts = [idx for idx in [first_bracket, first_brace] if idx != -1]
+    if not starts:
+        # rien qui ressemble à du JSON
+        raise ValueError("Impossible de trouver une structure JSON dans le texte suivant :\n" + text[:200])
+
+    start_idx = min(starts)
+    text = text[start_idx:].strip()
+
+    # 4) On parse enfin
     return json.loads(text)
+
 
 # --- 4. IA : GEMINI + GPT ---
 def build_quiz_prompt(topic_text: str, num_questions: int) -> str:
